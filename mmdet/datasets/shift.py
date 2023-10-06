@@ -60,7 +60,7 @@ class SHIFTDataset(CustomDataset):
                 "Must be one of ['file', 'zip', 'hdf5']"
             )
         self.seq_info = seq_info
-        if filter_cfg is not None and 'attributes' in filter_cfg:
+        if filter_cfg is not None and 'attributes' in filter_cfg and not self.test_mode:
             self.attr = filter_cfg['attributes']
             self.filter_attributes()
 
