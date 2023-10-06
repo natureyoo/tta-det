@@ -42,7 +42,7 @@ data = dict(
         pipeline=train_pipeline,
         filter_cfg=dict(
             attributes=attributes,
-            filter_empty_gt=False,
+            filter_empty_gt=True,
             min_size=32
         ),
         seq_info='seq.csv'
@@ -56,7 +56,7 @@ data = dict(
         pipeline=test_pipeline,
         filter_cfg=dict(
             attributes=attributes,
-            filter_empty_gt=False,
+            filter_empty_gt=True,
             min_size=32
         )
     ),
@@ -69,8 +69,8 @@ data = dict(
         pipeline=test_pipeline,
         filter_cfg=dict(
             attributes=attributes,
-            filter_empty_gt=False,
+            filter_empty_gt=True,
             min_size=32
         )
     ))
-evaluation = dict(interval=1, metric='bbox')
+evaluation = dict(interval=1, metric='mAP')

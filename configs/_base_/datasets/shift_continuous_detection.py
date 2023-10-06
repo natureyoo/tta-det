@@ -73,4 +73,4 @@ data = dict(
             min_size=32
         )
     ))
-evaluation = dict(interval=1, metric='bbox')
+evaluation = dict(interval=1, metric='mAP')

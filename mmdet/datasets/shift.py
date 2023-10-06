@@ -63,6 +63,9 @@ class SHIFTDataset(CustomDataset):
         if filter_cfg is not None and 'attributes' in filter_cfg and not self.test_mode:
             self.attr = filter_cfg['attributes']
             self.filter_attributes()
+        if filter_cfg['filter_empty_gt']:
+            self.filter_empty_gt_()
+
 
     def load_annotations(self, ann_file):
         print("Loading annotations...")
@@ -169,6 +172,18 @@ class SHIFTDataset(CustomDataset):
         print('valid files {} among {} after filtering'.format(len(filtered_data_infos), len(self.data_infos)))
         self.data_infos = filtered_data_infos
         self._set_group_flag()
+
+    def filter_empty_gt_(self):
+        filtered_data_infos = []
+        for d in self.data_infos:
+            # new_d = {k: d[k] for k in d}
+            # new_d['filename'] = os.path.join(ind, os.path.basename(d['filename']))
+            if d['ann']['labels'].shape[0] > 0:
+                filtered_data_infos.append(d)
+        print('valid files {} among {} after filtering'.format(len(filtered_data_infos), len(self.data_infos)))
+        self.data_infos = filtered_data_infos
+        self._set_group_flag()
+
 
 
 if __name__ == "__main__":
