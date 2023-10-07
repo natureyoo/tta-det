@@ -4,6 +4,9 @@ import os
 import os.path as osp
 import time
 import warnings
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+import numpy as np
 
 import mmcv
 import torch
@@ -19,7 +22,6 @@ from mmdet.models import build_detector
 from mmdet.utils import (build_ddp, build_dp, compat_cfg, get_device,
                          replace_cfg_vals, rfnext_init_model,
                          setup_multi_processes, update_data_root)
-from imagecorruptions import get_corruption_names
 
 
 def parse_args():
@@ -247,9 +249,11 @@ def main():
     # for backward compatibility
     test_loader_cfg['samples_per_gpu']=16
     results = {}
-    img_prfix = cfg.data.test['img_prefix']
-    for c_idx, corrupt in enumerate(get_corruption_names()[:]):
-        cfg.data.test['img_prefix'] = img_prfix.replace('val2017', 'val2017-{}'.format(corrupt))
+    source_attr = [dict(weather_coarse='clear', timeofday_coarse='daytime')]
+    weather_attr = [dict(weather_coarse=k) for k in ['cloudy', 'overcast', 'foggy', 'rainy']]
+    time_attr = [dict(timeofday_coarse=k) for k in ['dawn/dusk', 'night']]
+    for attr in source_attr + weather_attr + time_attr:
+        cfg.data.test['filter_cfg']['attributes'] = attr
         dataset = build_dataset(cfg.data.test)
         data_loader = build_dataloader(dataset, **test_loader_cfg)
         if 'CLASSES' in checkpoint.get('meta', {}):
@@ -297,16 +301,18 @@ def main():
                         'rule', 'dynamic_intervals'
                 ]:
                     eval_kwargs.pop(key, None)
-                eval_kwargs.update(dict(metric=args.eval, **kwargs))
+                # eval_kwargs.update(dict(metric=args.eval, **kwargs))
+                eval_kwargs.update(dict(metric=args.eval, iou_thr=[i for i in np.linspace(0.5, 0.95, 10)], **kwargs))
+                # [i for i in np.linspace(0.5, 0.95, 10)]
                 metric = dataset.evaluate(outputs, **eval_kwargs)
                 print(metric)
                 # metric_dict = dict(config=args.config, metric=metric)
                 # if args.work_dir is not None and rank == 0:
                 #     mmcv.dump(metric_dict, json_file)
-        results[corrupt] = metric
+        results['_'.join(list(attr.values()))] = metric
     mmcv.dump(results, json_file)
     for k in results:
-        print('{}: {}'.format(k, results[k]['bbox_mAP'] * 100))
+        print('{}: {}'.format(k, results[k]['mAP'] * 100))
 
 
 if __name__ == '__main__':

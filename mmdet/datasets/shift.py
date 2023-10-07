@@ -60,7 +60,8 @@ class SHIFTDataset(CustomDataset):
                 "Must be one of ['file', 'zip', 'hdf5']"
             )
         self.seq_info = seq_info
-        if filter_cfg is not None and 'attributes' in filter_cfg and not self.test_mode:
+        if filter_cfg is not None and 'attributes' in filter_cfg:
+            self.attr_idx = {'weather_coarse': 3, 'timeofday_coarse': 4}
             self.attr = filter_cfg['attributes']
             self.filter_attributes()
         if filter_cfg['filter_empty_gt']:
@@ -148,18 +149,15 @@ class SHIFTDataset(CustomDataset):
     def filter_attributes(self):
         valid_inds = []
         reader = csv.reader(open(os.path.join(self.data_root, self.seq_info), 'r'), delimiter=',')
+        attr_idx = [self.attr_idx[k] for k in list(self.attr.keys())]
+        attr_vals = list(self.attr.values())
         for idx, row in enumerate(reader):
-            if idx == 0:
-                header = row
-                attr_idx = [min([idx for idx, nm in enumerate(header) if k in nm]) for k in list(self.attr.keys())]
-                attr_vals = list(self.attr.values())
-            else:
-                valid = 1
-                for i, v in zip(attr_idx, attr_vals):
-                    if row[i] != v:
-                        valid = 0
-                if valid == 1:
-                    valid_inds.append(row[0])
+            valid = 1
+            for i, v in zip(attr_idx, attr_vals):
+                if row[i] != v:
+                    valid = 0
+            if valid == 1:
+                valid_inds.append(row[0])
         print('valid dirs {} among {} after filtering'.format(len(valid_inds), idx))
 
         filtered_data_infos = []

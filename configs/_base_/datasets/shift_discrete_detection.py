@@ -45,7 +45,7 @@ data = dict(
             filter_empty_gt=True,
             min_size=32
         ),
-        seq_info='seq.csv'
+        seq_info='train/front/seq.csv'
     ),
     val=dict(
         type=dataset_type,
@@ -58,19 +58,21 @@ data = dict(
             attributes=attributes,
             filter_empty_gt=True,
             min_size=32
-        )
+        ),
+        seq_info='val/front/seq.csv'
     ),
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='test/front/det_2d.json',
-        img_prefix='test/front/images',
+        ann_file='val/front/det_2d.json',
+        img_prefix='val/front/images',
         backend_type='file',
         pipeline=test_pipeline,
         filter_cfg=dict(
             attributes=attributes,
             filter_empty_gt=True,
             min_size=32
-        )
+        ),
+        seq_info='val/front/seq.csv'
     ))
 evaluation = dict(interval=1, metric='mAP')
