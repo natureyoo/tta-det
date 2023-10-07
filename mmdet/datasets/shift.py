@@ -185,7 +185,6 @@ class SHIFTDataset(CustomDataset):
         self._set_group_flag()
 
 
-
 if __name__ == "__main__":
     """Example for loading the SHIFT dataset for instance segmentation."""
 
