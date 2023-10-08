@@ -4,6 +4,8 @@ import os
 import os.path as osp
 import time
 import warnings
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import mmcv
 import torch
@@ -224,7 +226,6 @@ def main():
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
         json_file = osp.join(args.work_dir, f'eval_{timestamp}.json')
 
-    test_loader_cfg['samples_per_gpu']=16
     # cfg.data.test['img_prefix'] = cfg.data.test['img_prefix'].replace('val2017', 'val2017-gaussian_noise')
     # build the dataloader
     # dataset = build_dataset(cfg.data.test)
@@ -245,7 +246,7 @@ def main():
         model = fuse_conv_bn(model)
     # old versions did not save class info in checkpoints, this walkaround is
     # for backward compatibility
-    test_loader_cfg['samples_per_gpu']=16
+    test_loader_cfg['samples_per_gpu'] = 4
     results = {}
     img_prfix = cfg.data.test['img_prefix']
     for c_idx, corrupt in enumerate(get_corruption_names()[:]):

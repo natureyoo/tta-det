@@ -13,6 +13,7 @@ SHARED_HEADS = MODELS
 HEADS = MODELS
 LOSSES = MODELS
 DETECTORS = MODELS
+ADAPTERS = MODELS
 
 
 def build_backbone(cfg):
@@ -57,3 +58,8 @@ def build_detector(cfg, train_cfg=None, test_cfg=None):
         'test_cfg specified in both outer field and model field '
     return DETECTORS.build(
         cfg, default_args=dict(train_cfg=train_cfg, test_cfg=test_cfg))
+
+
+def build_adapter(cfg, detector=None):
+    assert detector is not None
+    return ADAPTERS.build(cfg, default_args=dict(detector=detector))

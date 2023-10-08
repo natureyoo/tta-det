@@ -4,6 +4,8 @@ import os
 import os.path as osp
 import time
 import warnings
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 import mmcv
 import torch
@@ -12,13 +14,14 @@ from mmcv.cnn import fuse_conv_bn
 from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
                          wrap_fp16_model)
 
-from mmdet.apis import multi_gpu_test, single_gpu_test, collect_features
+from mmdet.apis import single_gpu_adapt
 from mmdet.datasets import (build_dataloader, build_dataset,
                             replace_ImageToTensor)
-from mmdet.models import build_detector
+from mmdet.models import build_detector, build_adapter
 from mmdet.utils import (build_ddp, build_dp, compat_cfg, get_device,
                          replace_cfg_vals, rfnext_init_model,
                          setup_multi_processes, update_data_root)
+from imagecorruptions import get_corruption_names
 
 
 def parse_args():
@@ -114,10 +117,6 @@ def parse_args():
         action='store_true',
         help='paint only segmentation masks on the images to be saved. This '
         'is only effective with --show-dir.')
-    parser.add_argument(
-        '--collect-features',
-        action='store_true',
-        help='collect source domain features')
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -227,85 +226,68 @@ def main():
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
         json_file = osp.join(args.work_dir, f'eval_{timestamp}.json')
 
-    # build the dataloader
-    if args.collect_features:
-        cfg.data.test['ann_file'] = cfg.data.train['ann_file']
-        cfg.data.test['img_prefix'] = cfg.data.train['img_prefix']
-        test_loader_cfg['samples_per_gpu'] = 8
-    dataset = build_dataset(cfg.data.test)
-    data_loader = build_dataloader(dataset, **test_loader_cfg)
-
     # build the model and load checkpoint
     cfg.model.train_cfg = None
-    model = build_detector(cfg.model, test_cfg=cfg.get('test_cfg'))
+    # old versions did not save class info in checkpoints, this walkaround is
+    # for backward compatibility
+    results = {}
+    img_prfix = cfg.data.test['img_prefix']
+    test_loader_cfg['samples_per_gpu'] = 4
+    # initialize source trained model
+    detector = build_detector(cfg.model, test_cfg=cfg.get('test_cfg'))
     # init rfnext if 'RFSearchHook' is defined in cfg
-    rfnext_init_model(model, cfg=cfg)
+    rfnext_init_model(detector, cfg=cfg)
     fp16_cfg = cfg.get('fp16', None)
     if fp16_cfg is None and cfg.get('device', None) == 'npu':
         fp16_cfg = dict(loss_scale='dynamic')
     if fp16_cfg is not None:
-        wrap_fp16_model(model)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
-    if args.fuse_conv_bn:
-        model = fuse_conv_bn(model)
-    # old versions did not save class info in checkpoints, this walkaround is
-    # for backward compatibility
-    if 'CLASSES' in checkpoint.get('meta', {}):
-        model.CLASSES = checkpoint['meta']['CLASSES']
-    else:
-        model.CLASSES = dataset.CLASSES
+        wrap_fp16_model(detector)
+    for c_idx, corrupt in enumerate(get_corruption_names()[:]):
+        checkpoint = load_checkpoint(detector, args.checkpoint, map_location='cpu')
+        if args.fuse_conv_bn:
+            detector = fuse_conv_bn(detector)
 
-    if not distributed:
-        model = build_dp(model, cfg.device, device_ids=cfg.gpu_ids)
-        assert not (args.show_box_only and args.show_mask_only), \
-            '"--show-box-only" and "--show-mask-only" cannot be both specified'
-        if args.collect_features:
-            features = collect_features(model, data_loader)
-            torch.save(features, os.path.join('storage/stats', '{}.pth'.format(os.path.basename(cfg.filename).replace('.py', ''))))
-            exit()
+        model = build_adapter(cfg.adapter, detector=detector)
+        cfg.data.test['img_prefix'] = img_prfix.replace('val2017', 'val2017-{}'.format(corrupt))
+        dataset = build_dataset(cfg.data.test)
+        data_loader = build_dataloader(dataset, **test_loader_cfg)
+        if 'CLASSES' in checkpoint.get('meta', {}):
+            model.CLASSES = checkpoint['meta']['CLASSES']
         else:
-            outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
-                                      args.show_score_thr, args.show_box_only,
-                                      args.show_mask_only)
-    else:
-        model = build_ddp(
-            model,
-            cfg.device,
-            device_ids=[int(os.environ['LOCAL_RANK'])],
-            broadcast_buffers=False)
+            model.CLASSES = dataset.CLASSES
 
-        # In multi_gpu_test, if tmpdir is None, some tesnors
-        # will init on cuda by default, and no device choice supported.
-        # Init a tmpdir to avoid error on npu here.
-        if cfg.device == 'npu' and args.tmpdir is None:
-            args.tmpdir = './npu_tmpdir'
+        if not distributed:
+            model = build_dp(model, cfg.device, device_ids=cfg.gpu_ids)
+            assert not (args.show_box_only and args.show_mask_only), \
+                '"--show-box-only" and "--show-mask-only" cannot be both specified'
+            outputs = single_gpu_adapt(model, data_loader, cfg)
 
-        outputs = multi_gpu_test(
-            model, data_loader, args.tmpdir, args.gpu_collect
-            or cfg.evaluation.get('gpu_collect', False))
-
-    rank, _ = get_dist_info()
-    if rank == 0:
-        if args.out:
-            print(f'\nwriting results to {args.out}')
-            mmcv.dump(outputs, args.out)
-        kwargs = {} if args.eval_options is None else args.eval_options
-        if args.format_only:
-            dataset.format_results(outputs, **kwargs)
-        if args.eval:
-            eval_kwargs = cfg.get('evaluation', {}).copy()
-            # hard-code way to remove EvalHook args
-            for key in [
-                    'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
-                    'rule', 'dynamic_intervals'
-            ]:
-                eval_kwargs.pop(key, None)
-            eval_kwargs.update(dict(metric=args.eval, **kwargs))
-            metric = dataset.evaluate(outputs, **eval_kwargs)
-            print(metric)
-            metric_dict = dict(config=args.config, metric=metric)
-            if args.work_dir is not None and rank == 0:
-                mmcv.dump(metric_dict, json_file)
+        rank, _ = get_dist_info()
+        if rank == 0:
+            if args.out:
+                print(f'\nwriting results to {args.out}')
+                mmcv.dump(outputs, args.out)
+            kwargs = {} if args.eval_options is None else args.eval_options
+            if args.format_only:
+                dataset.format_results(outputs, **kwargs)
+            if args.eval:
+                eval_kwargs = cfg.get('evaluation', {}).copy()
+                # hard-code way to remove EvalHook args
+                for key in [
+                        'interval', 'tmpdir', 'start', 'gpu_collect', 'save_best',
+                        'rule', 'dynamic_intervals'
+                ]:
+                    eval_kwargs.pop(key, None)
+                eval_kwargs.update(dict(metric=args.eval, **kwargs))
+                metric = dataset.evaluate(outputs, **eval_kwargs)
+                print(metric)
+                # metric_dict = dict(config=args.config, metric=metric)
+                # if args.work_dir is not None and rank == 0:
+                #     mmcv.dump(metric_dict, json_file)
+        results[corrupt] = metric
+    mmcv.dump(results, json_file)
+    for k in results:
+        print('{}: {}'.format(k, results[k]['bbox_mAP'] * 100))
 
 
 if __name__ == '__main__':

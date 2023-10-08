@@ -170,11 +170,13 @@ class TwoStageDetector(BaseDetector):
         return await self.roi_head.async_simple_test(
             x, proposal_list, img_meta, rescale=rescale)
 
-    def simple_test(self, img, img_metas, proposals=None, rescale=False):
+    def simple_test(self, img, img_metas, proposals=None, rescale=False, return_feats=False):
         """Test without augmentation."""
 
         assert self.with_bbox, 'Bbox head must be implemented.'
         x = self.extract_feat(img)
+        if return_feats:
+            return x
         if proposals is None:
             proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
         else:
@@ -209,3 +211,25 @@ class TwoStageDetector(BaseDetector):
                 f'list of supported models,'
                 f'https://mmdetection.readthedocs.io/en/latest/tutorials/pytorch2onnx.html#list-of-supported-models-exportable-to-onnx'  # noqa E501
             )
+
+    def adapt(self, imgs, img_metas, **kwargs):
+        """Adapt."""
+
+        num_augs = len(imgs)
+        if num_augs != len(img_metas):
+            raise ValueError(f'num of augmentations ({len(imgs)}) '
+                             f'!= num of image meta ({len(img_metas)})')
+
+        # NOTE the batched image size information may be useful, e.g.
+        # in DETR, this is needed for the construction of masks, which is
+        # then used for the transformer_head.
+        for img, img_meta in zip(imgs, img_metas):
+            batch_size = len(img_meta)
+            for img_id in range(batch_size):
+                img_meta[img_id]['batch_input_shape'] = tuple(img.size()[-2:])
+
+        x = self.extract_feat(imgs[0])
+        proposal_list = self.rpn_head.simple_test_rpn(x, img_metas[0])
+
+        return x, self.roi_head.simple_test(
+            x, proposal_list, img_metas[0], **kwargs)

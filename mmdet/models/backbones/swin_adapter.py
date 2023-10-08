@@ -2,7 +2,6 @@
 import warnings
 from collections import OrderedDict
 from copy import deepcopy
-import math
 
 import torch
 import torch.nn as nn
@@ -18,70 +17,6 @@ from ...utils import get_root_logger
 from ..builder import BACKBONES
 from ..utils.ckpt_convert import swin_converter
 from ..utils.transformer import PatchEmbed, PatchMerging
-
-
-class Adapter(nn.Module):
-    def __init__(self,
-                 d_model=None,
-                 hidden_ratio=None,
-                 layernorm_option=None,
-                 scalar=None,
-                 dropout=None,
-                 init_option='lora'):
-        super().__init__()
-        self.n_embd = d_model
-        # self.n_embd = config.D_MODEL
-        # self.down_size = bottleneck
-        self.down_size = d_model // hidden_ratio
-        # self.down_size = config.BOTTLENECK
-
-        #_before
-        self.adapter_layernorm_option = layernorm_option
-
-        self.adapter_layer_norm_before = None
-        if layernorm_option == "in" or layernorm_option == "out":
-            self.adapter_layer_norm_before = nn.LayerNorm(self.n_embd)
-
-        if scalar == "learnable_scalar":
-            self.scale = nn.Parameter(torch.ones(1))
-        else:
-            self.scale = float(scalar)
-
-        self.down_proj = nn.Linear(self.n_embd, self.down_size)
-        self.non_linear_func = nn.ReLU()
-        self.up_proj = nn.Linear(self.down_size, self.n_embd)
-
-        self.dropout = dropout
-        if init_option == "bert":
-            raise NotImplementedError
-        elif init_option == "lora":
-            with torch.no_grad():
-                nn.init.kaiming_uniform_(self.down_proj.weight, a=math.sqrt(5))
-                nn.init.zeros_(self.up_proj.weight)
-                nn.init.zeros_(self.down_proj.bias)
-                nn.init.zeros_(self.up_proj.bias)
-
-    def forward(self, x, add_residual=False, residual=None):
-        residual = x if residual is None else residual
-        if self.adapter_layernorm_option == 'in':
-            x = self.adapter_layer_norm_before(x)
-
-        down = self.down_proj(x)
-        down = self.non_linear_func(down)
-        down = nn.functional.dropout(down, p=self.dropout, training=self.training)
-        up = self.up_proj(down)
-
-        up = up * self.scale
-
-        if self.adapter_layernorm_option == 'out':
-            up = self.adapter_layer_norm_before(up)
-
-        if add_residual:
-            output = up + residual
-        else:
-            output = up
-
-        return output
 
 
 class WindowMSA(BaseModule):
@@ -389,8 +324,7 @@ class SwinBlock(BaseModule):
                  act_cfg=dict(type='GELU'),
                  norm_cfg=dict(type='LN'),
                  with_cp=False,
-                 init_cfg=None,
-                 adapter_cfg=None):
+                 init_cfg=None):
 
         super(SwinBlock, self).__init__()
 
@@ -421,11 +355,6 @@ class SwinBlock(BaseModule):
             add_identity=True,
             init_cfg=None)
 
-        if adapter_cfg is not None:
-            self.adapter = Adapter(d_model=embed_dims, **adapter_cfg)
-        else:
-            self.adapter = None
-
     def forward(self, x, hw_shape):
 
         def _inner_forward(x):
@@ -438,9 +367,6 @@ class SwinBlock(BaseModule):
             identity = x
             x = self.norm2(x)
             x = self.ffn(x, identity=identity)
-
-            if self.adapter is not None:
-                x = x + self.adapter(identity)
 
             return x
 
@@ -496,8 +422,7 @@ class SwinBlockSequence(BaseModule):
                  act_cfg=dict(type='GELU'),
                  norm_cfg=dict(type='LN'),
                  with_cp=False,
-                 init_cfg=None,
-                 adapter_cfg=None):
+                 init_cfg=None):
         super().__init__(init_cfg=init_cfg)
 
         if isinstance(drop_path_rate, list):
@@ -522,8 +447,7 @@ class SwinBlockSequence(BaseModule):
                 act_cfg=act_cfg,
                 norm_cfg=norm_cfg,
                 with_cp=with_cp,
-                init_cfg=None,
-                adapter_cfg=adapter_cfg)
+                init_cfg=None)
             self.blocks.append(block)
 
         self.downsample = downsample
@@ -540,7 +464,7 @@ class SwinBlockSequence(BaseModule):
 
 
 @BACKBONES.register_module()
-class SwinTransformer(BaseModule):
+class SwinTransformerAdapter(BaseModule):
     """ Swin Transformer
     A PyTorch implement of : `Swin Transformer:
     Hierarchical Vision Transformer using Shifted Windows`  -
@@ -621,8 +545,7 @@ class SwinTransformer(BaseModule):
                  pretrained=None,
                  convert_weights=False,
                  frozen_stages=-1,
-                 init_cfg=None,
-                 adapter_cfg=None):
+                 init_cfg=None):
         self.convert_weights = convert_weights
         self.frozen_stages = frozen_stages
         if isinstance(pretrain_img_size, int):
@@ -704,8 +627,7 @@ class SwinTransformer(BaseModule):
                 act_cfg=act_cfg,
                 norm_cfg=norm_cfg,
                 with_cp=with_cp,
-                init_cfg=None,
-                adapter_cfg=adapter_cfg)
+                init_cfg=None)
             self.stages.append(stage)
             if downsample:
                 in_channels = downsample.out_channels
@@ -848,11 +770,3 @@ class SwinTransformer(BaseModule):
                 outs.append(out)
 
         return outs
-
-    def set_adaptable_params(self):
-        learnable_params = []
-        for i, stage in enumerate(self.stages):
-            for j, block in enumerate(stage.blocks):
-                block.adapter.requires_grad_(True)
-                learnable_params += list(block.adapter.parameters())
-        return learnable_params

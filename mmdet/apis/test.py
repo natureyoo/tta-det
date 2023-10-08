@@ -219,3 +219,37 @@ def collect_results_gpu(result_part, size):
         # the dataloader may pad some samples
         ordered_results = ordered_results[:size]
         return ordered_results
+
+
+def collect_features(model, data_loader, sample_num=5000):
+    model.eval()
+    dataset = data_loader.dataset
+    prog_bar = mmcv.ProgressBar(len(dataset))
+    accum_feats = {}
+    accum_sample_num = 0
+
+    for i, data in enumerate(data_loader):
+        with torch.no_grad():
+            features = model(return_loss=False, rescale=True, return_feats=True, **data)
+            for idx, f in enumerate(features):
+                if idx not in accum_feats:
+                    accum_feats[idx] = (torch.nn.AdaptiveAvgPool2d((2 ** (idx + 1), 2 ** (idx + 1)))(f.detach()), f.mean(dim=[2,3]).detach())
+                else:
+                    accum_feats[idx] = (torch.cat(
+                    [accum_feats[idx][0], torch.nn.AdaptiveAvgPool2d((2 ** (idx + 1), 2 ** (idx + 1)))(f.detach())], dim=0),
+                                        torch.cat([accum_feats[idx][1], f.mean(dim=[2,3]).detach()], dim=0))
+        batch_size = features[0].shape[0]
+        accum_sample_num += batch_size
+        if accum_sample_num > sample_num:
+            break
+        for _ in range(batch_size):
+            prog_bar.update()
+
+    stats = {}
+    for k in accum_feats:
+        mean_spatial = accum_feats[k][0].mean(dim=0)
+        var_spatial = accum_feats[k][0].var(dim=0)
+        mean_ch = accum_feats[k][1].mean(dim=0)
+        cov_ch = torch.cov(accum_feats[k][1].T)
+        stats[k] = (mean_spatial, var_spatial, mean_ch, cov_ch)
+    return stats
