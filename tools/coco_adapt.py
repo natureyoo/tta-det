@@ -306,7 +306,7 @@ def main():
         results[corrupt] = metric
 
         if args.wandb:
-            wandb.log({'mAP': metric['bbox_mAP'] * 100, 'mAP50': metric['bbox_mAP50'] * 100}, step=wandb_idx)
+            wandb.log({'mAP': metric['bbox_mAP'] * 100, 'mAP50': metric['bbox_mAP_50'] * 100}, step=wandb_idx)
     mmcv.dump(results, json_file)
     for k in results:
         print('{}: {}'.format(k, results[k]['bbox_mAP'] * 100))
