@@ -1,15 +1,12 @@
 _base_ = [
-    '../swin/faster_rcnn_swin-t-p4-w7_fpn_1x_coco.py'
+    './faster_rcnn_swin-t_fpn_1x_shift_discrete.py'
 ]
 
 data = dict(samples_per_gpu=2)
 adapter = dict(
     type='Adapter',
     is_adapt=True,
-    where='full',
-    how='ema-kl',
-    gamma=128,
-    source_stats='./storage/stats/faster_rcnn_swin-t-p4-w7_fpn_1x_coco.pth'
+    where='adapter',
 )
 model = dict(
     type='FasterRCNN',

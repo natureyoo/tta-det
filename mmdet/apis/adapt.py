@@ -18,22 +18,25 @@ from mmdet.utils import get_device
 def single_gpu_adapt(model,
                     data_loader,
                     cfg,
-                    out_dir=None):
+                    wandb_init_idx=0,
+                    wandb=None):
     optimizer = model.module.build_optimizer(cfg.optimizer)
     results = []
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
+    iter_idx = 0
     for i, data in enumerate(data_loader):
         outputs = model(rescale=True, **data)
 
+        result = outputs['results']
+        batch_size = len(result)
+        iter_idx += batch_size
         if 'loss' in outputs:
             optimizer.zero_grad()
             sum(outputs['loss'].values()).backward()
             print({k: '{:.3f}'.format(outputs['loss'][k].item()) for k in outputs['loss']})
+            wandb.log(outputs['loss'], step=wandb_init_idx + iter_idx)
             optimizer.step()
-
-        result = outputs['results']
-        batch_size = len(result)
 
         # encode mask results
         if isinstance(result[0], tuple):
@@ -50,5 +53,5 @@ def single_gpu_adapt(model,
 
         for _ in range(batch_size):
             prog_bar.update()
-    return results
+    return results, wandb_init_idx + iter_idx
 

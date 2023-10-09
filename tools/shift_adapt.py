@@ -21,7 +21,7 @@ from mmdet.models import build_detector, build_adapter
 from mmdet.utils import (build_ddp, build_dp, compat_cfg, get_device,
                          replace_cfg_vals, rfnext_init_model,
                          setup_multi_processes, update_data_root)
-from imagecorruptions import get_corruption_names
+import numpy as np
 
 
 def parse_args():
@@ -249,8 +249,6 @@ def main():
     cfg.model.train_cfg = None
     # old versions did not save class info in checkpoints, this walkaround is
     # for backward compatibility
-    results = {}
-    img_prfix = cfg.data.test['img_prefix']
     test_loader_cfg['samples_per_gpu'] = 4
     # initialize source trained model
     detector = build_detector(cfg.model, test_cfg=cfg.get('test_cfg'))
@@ -261,15 +259,22 @@ def main():
         fp16_cfg = dict(loss_scale='dynamic')
     if fp16_cfg is not None:
         wrap_fp16_model(detector)
-    for c_idx, corrupt in enumerate(get_corruption_names()[:]):
+    # old versions did not save class info in checkpoints, this walkaround is
+    # for backward compatibility
+    results = {}
+    source_attr = [dict(weather_coarse='clear', timeofday_coarse='daytime')]
+    weather_attr = [dict(weather_coarse=k) for k in ['cloudy', 'overcast', 'foggy', 'rainy']]
+    time_attr = [dict(timeofday_coarse=k) for k in ['dawn/dusk', 'night']]
+    for attr in source_attr + weather_attr + time_attr:
+        cfg.data.test['filter_cfg']['attributes'] = attr
+        dataset = build_dataset(cfg.data.test)
+        data_loader = build_dataloader(dataset, **test_loader_cfg)
+
         checkpoint = load_checkpoint(detector, args.checkpoint, map_location='cpu')
         if args.fuse_conv_bn:
             detector = fuse_conv_bn(detector)
 
         model = build_adapter(cfg.adapter, detector=detector)
-        cfg.data.test['img_prefix'] = img_prfix.replace('val2017', 'val2017-{}'.format(corrupt))
-        dataset = build_dataset(cfg.data.test)
-        data_loader = build_dataloader(dataset, **test_loader_cfg)
         if 'CLASSES' in checkpoint.get('meta', {}):
             model.CLASSES = checkpoint['meta']['CLASSES']
         else:
@@ -297,19 +302,20 @@ def main():
                         'rule', 'dynamic_intervals'
                 ]:
                     eval_kwargs.pop(key, None)
-                eval_kwargs.update(dict(metric=args.eval, **kwargs))
+                # eval_kwargs.update(dict(metric=args.eval, **kwargs))
+                eval_kwargs.update(dict(metric=args.eval, iou_thr=[i for i in np.linspace(0.5, 0.95, 10)], **kwargs))
+                # [i for i in np.linspace(0.5, 0.95, 10)]
                 metric = dataset.evaluate(outputs, **eval_kwargs)
                 print(metric)
                 # metric_dict = dict(config=args.config, metric=metric)
                 # if args.work_dir is not None and rank == 0:
                 #     mmcv.dump(metric_dict, json_file)
-        results[corrupt] = metric
-
+        results['_'.join(list(attr.values()))] = metric
         if args.wandb:
-            wandb.log({'mAP': metric['bbox_mAP'] * 100, 'mAP50': metric['bbox_mAP50'] * 100}, step=wandb_idx)
+            wandb.log({'mAP': metric['mAP'] * 100, 'mAP50': metric['mAP50'] * 100}, step=wandb_idx)
     mmcv.dump(results, json_file)
     for k in results:
-        print('{}: {}'.format(k, results[k]['bbox_mAP'] * 100))
+        print('{}: {}'.format(k, results[k]['mAP'] * 100))
 
 
 if __name__ == '__main__':

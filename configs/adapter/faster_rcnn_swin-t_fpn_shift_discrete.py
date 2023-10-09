@@ -1,5 +1,5 @@
 _base_ = [
-    '../swin/faster_rcnn_swin-t-p4-w7_fpn_1x_coco.py'
+    '../swin/faster_rcnn_swin-t-p4-w7_fpn_1x_shift_discrete.py'
 ]
 
 data = dict(samples_per_gpu=2)
@@ -9,21 +9,8 @@ adapter = dict(
     where='full',
     how='ema-kl',
     gamma=128,
-    source_stats='./storage/stats/faster_rcnn_swin-t-p4-w7_fpn_1x_coco.pth'
+    source_stats='./storage/stats/faster_rcnn_swin-t-p4-w7-fpn_1x_shift_epoch_12.pth'
 )
-model = dict(
-    type='FasterRCNN',
-    backbone=dict(
-        _delete_=True,
-        type='SwinTransformer',
-        adapter_cfg=dict(
-            hidden_ratio=32,
-            layernorm_option=None,
-            scalar=0.1,
-            dropout=0.0,
-            init_option='lora'
-        )),
-    neck=dict(in_channels=[96, 192, 384, 768]))
 optimizer = dict(
     _delete_=True,
     type='AdamW',

@@ -64,11 +64,13 @@ class Adapter(BaseModule, metaclass=ABCMeta):
 
     def build_optimizer(self, cfg):
         # optimizer = build_optimizer(self.learnable_params, cfg)
-        if 'type' in cfg:
-            cfg.pop('type')
         if 'paramwise_cfg' in cfg:
             cfg.pop('paramwise_cfg')
-        optimizer = torch.optim.AdamW(self.learnable_params, **cfg)
+        _cfg = {k: cfg[k] for k in cfg if k != 'type'}
+        if cfg['type'] == 'AdamW':
+            optimizer = torch.optim.AdamW(self.learnable_params, **_cfg)
+        else:
+            optimizer = torch.optim.SGD(self.learnable_params, **_cfg)
         return optimizer
 
     def extract_feats(self, imgs):
@@ -115,9 +117,9 @@ class Adapter(BaseModule, metaclass=ABCMeta):
                                  + self.gamma * (diff.t() @ diff - self.t_stats[idx][3].to(f.device) * f.shape[0])\
                                  - delta.reshape(-1, 1) @ delta.reshape(1, -1)
                 t_dist = torch.distributions.MultivariateNormal(cur_t_mean, cur_t_cov + self.alpha[idx].to(f.device))
-                s_dist = torch.distributions.MultivariateNormal(self.s_stats[idx][2].to(f.device), self.s_stats[idx][3].to(f.device))
+                s_dist = torch.distributions.MultivariateNormal(self.s_stats[idx][2].to(f.device), self.s_stats[idx][3].to(f.device) + self.alpha[idx].to(f.device))
                 self.t_stats[idx] = (self.t_stats[idx][0], self.t_stats[idx][1], cur_t_mean.detach(), cur_t_cov.detach())
-                losses['ema-kl'] += (torch.distributions.kl.kl_divergence(s_dist, t_dist)
+                losses['ema-kl'] += 0.1 * (torch.distributions.kl.kl_divergence(s_dist, t_dist)
                                + torch.distributions.kl.kl_divergence(t_dist, s_dist)) / 2
         elif self.how == 'ema-l1':
             losses['ema-l1-mean'], losses['ema-l1-var'] = 0, 0

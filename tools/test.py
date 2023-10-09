@@ -231,7 +231,10 @@ def main():
     if args.collect_features:
         cfg.data.test['ann_file'] = cfg.data.train['ann_file']
         cfg.data.test['img_prefix'] = cfg.data.train['img_prefix']
-        test_loader_cfg['samples_per_gpu'] = 8
+        cfg.data.test['seq_info'] = cfg.data.train['seq_info']
+        test_loader_cfg['samples_per_gpu'] = 4
+    source_attr = [dict(weather_coarse='clear', timeofday_coarse='daytime')]
+    cfg.data.test['filter_cfg']['attributes'] = source_attr[0]
     dataset = build_dataset(cfg.data.test)
     data_loader = build_dataloader(dataset, **test_loader_cfg)
 
@@ -261,7 +264,7 @@ def main():
             '"--show-box-only" and "--show-mask-only" cannot be both specified'
         if args.collect_features:
             features = collect_features(model, data_loader)
-            torch.save(features, os.path.join('storage/stats', '{}.pth'.format(os.path.basename(cfg.filename).replace('.py', ''))))
+            torch.save(features, os.path.join('storage/stats', os.path.basename(args.checkpoint)))
             exit()
         else:
             outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
