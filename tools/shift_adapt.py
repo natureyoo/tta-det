@@ -312,7 +312,7 @@ def main():
                 #     mmcv.dump(metric_dict, json_file)
         results['_'.join(list(attr.values()))] = metric
         if args.wandb:
-            wandb.log({'mAP': metric['mAP'] * 100, 'mAP50': metric['mAP50'] * 100}, step=wandb_idx)
+            wandb.log({'mAP': metric['mAP'] * 100, 'mAP50': metric['AP50'] * 100}, step=wandb_idx)
     mmcv.dump(results, json_file)
     for k in results:
         print('{}: {}'.format(k, results[k]['mAP'] * 100))
