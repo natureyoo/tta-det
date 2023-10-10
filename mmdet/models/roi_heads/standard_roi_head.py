@@ -266,6 +266,23 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                 x, img_metas, det_bboxes, det_labels, rescale=rescale)
             return list(zip(bbox_results, segm_results))
 
+    def extract_feat(self, x, proposal_list, img_metas, rescale=False):
+        rois = bbox2roi(proposal_list)
+
+        if rois.shape[0] == 0:
+            batch_size = len(proposal_list)
+            det_bbox = rois.new_zeros(0, 5)
+            det_label = rois.new_zeros((0, ), dtype=torch.long)
+            if self.test_cfg is None:
+                det_bbox = det_bbox[:, :4]
+                det_label = rois.new_zeros(
+                    (0, self.bbox_head.fc_cls.out_features))
+            # There is no proposal in the whole batch
+            return [det_bbox] * batch_size, [det_label] * batch_size
+        bbox_feats = self.bbox_roi_extractor(
+            x[:self.bbox_roi_extractor.num_inputs], rois)
+        return bbox_feats
+
     def aug_test(self, x, proposal_list, img_metas, rescale=False):
         """Test with augmentations.
 

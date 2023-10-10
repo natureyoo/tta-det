@@ -176,7 +176,10 @@ class TwoStageDetector(BaseDetector):
         assert self.with_bbox, 'Bbox head must be implemented.'
         x = self.extract_feat(img)
         if return_feats:
-            return x
+            proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
+            box_features = self.roi_head.extract_feat(
+                x, proposal_list, img_metas, rescale=rescale)
+            return {'backbone': x, 'box': box_features}
         if proposals is None:
             proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
         else:

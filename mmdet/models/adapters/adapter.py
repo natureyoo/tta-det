@@ -93,7 +93,7 @@ class Adapter(BaseModule, metaclass=ABCMeta):
             for idx, f in enumerate(features):
                 self.features[idx] = torch.cat([self.features[idx], torch.nn.AdaptiveAvgPool2d((2**(idx+1), 2**(idx+1)))(f.detach())], dim=0)
 
-    def forward_train(self, imgs, img_metas, **kwargs):
+    def forward_train(self, imgs, img_metas, wandb=None, **kwargs):
         outputs = {}
         if self.is_adapt:
             feats, results = self.detector.adapt(imgs, img_metas, **kwargs)
@@ -121,6 +121,7 @@ class Adapter(BaseModule, metaclass=ABCMeta):
                 self.t_stats[idx] = (self.t_stats[idx][0], self.t_stats[idx][1], cur_t_mean.detach(), cur_t_cov.detach())
                 losses['ema-kl'] += 0.1 * (torch.distributions.kl.kl_divergence(s_dist, t_dist)
                                + torch.distributions.kl.kl_divergence(t_dist, s_dist)) / 2
+                # losses['ema-kl'] += torch.distributions.kl.kl_divergence(s_dist, t_dist)
         elif self.how == 'ema-l1':
             losses['ema-l1-mean'], losses['ema-l1-var'] = 0, 0
             for idx, _f in enumerate(feats):
@@ -148,7 +149,6 @@ class Adapter(BaseModule, metaclass=ABCMeta):
             for idx, _f in enumerate(feats):
                 f = torch.nn.AdaptiveAvgPool2d((2 ** (idx + 1), 2 ** (idx + 1)))(_f)
                 losses['cur-l1-mean'] += torch.nn.L1Loss()(self.s_stats[idx][0].to(f.device), f.mean(dim=0))
-
         return losses
 
 

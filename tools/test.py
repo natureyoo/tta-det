@@ -233,6 +233,7 @@ def main():
         cfg.data.test['img_prefix'] = cfg.data.train['img_prefix']
         cfg.data.test['seq_info'] = cfg.data.train['seq_info']
         test_loader_cfg['samples_per_gpu'] = 4
+        test_loader_cfg['shuffle'] = True
     source_attr = [dict(weather_coarse='clear', timeofday_coarse='daytime')]
     cfg.data.test['filter_cfg']['attributes'] = source_attr[0]
     dataset = build_dataset(cfg.data.test)

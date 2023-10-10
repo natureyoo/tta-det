@@ -1,16 +1,26 @@
 # tta swin full
-python tools/shift_adapt.py \
+for lr in 0.0001
+do python tools/shift_adapt.py \
     configs/adapter/faster_rcnn_swin-t_fpn_shift_discrete.py \
     storage/ckpt/faster_rcnn_swin-t-p4-w7-fpn_1x_shift_epoch_12.pth \
-    --work-dir "work_dirs/SHIFT/faster_rcnn_swin-t-p4-w7_fpn_1x_tta_ema-kl_full_lr-0.0001" \
-    --eval "mAP" --wandb
+    --work-dir "work_dirs/SHIFT/faster_rcnn_swin-t-p4-w7_fpn_1x_tta_ema-kl_full_lr-${lr}_clip5.0" \
+    --eval "mAP" --wandb --lr ${lr}
+done
 
-# tta swin adapter
-python tools/shift_adapt.py \
-    configs/adapter/faster_rcnn_swin-t_fpn_shift_discrete_adapter.py \
+for lr in 0.0001
+do python tools/shift_adapt.py \
+    configs/adapter/faster_rcnn_swin-t_fpn_shift_discrete.py \
     storage/ckpt/faster_rcnn_swin-t-p4-w7-fpn_1x_shift_epoch_12.pth \
-    --work-dir "work_dirs/SHIFT/faster_rcnn_swin-t-p4-w7_fpn_1x_tta_ema-kl_adapter_lr-0.0001" \
-    --eval "mAP" --wandb
+    --work-dir "work_dirs/SHIFT_CTA/faster_rcnn_swin-t-p4-w7_fpn_1x_ema-kl_full_lr-${lr}_clip5.0" \
+    --eval "mAP" --wandb --lr ${lr} --continual
+done
+
+## tta swin adapter
+#python tools/shift_adapt.py \
+#    configs/adapter/faster_rcnn_swin-t_fpn_shift_discrete_adapter.py \
+#    storage/ckpt/faster_rcnn_swin-t-p4-w7-fpn_1x_shift_epoch_12.pth \
+#    --work-dir "work_dirs/SHIFT/faster_rcnn_swin-t-p4-w7_fpn_1x_tta_ema-kl_adapter_lr-0.0001" \
+#    --eval "mAP" --wandb
 
 # direct test res50
 #python tools/coco_corrupt_test.py \

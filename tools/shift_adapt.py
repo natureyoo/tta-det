@@ -125,6 +125,10 @@ def parse_args():
         '--lr',
         type=float, default=None,
         help='lr for adapting')
+    parser.add_argument(
+        '--continual',
+        action='store_true',
+        help='continual tta, no model revert')
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -265,26 +269,27 @@ def main():
     source_attr = [dict(weather_coarse='clear', timeofday_coarse='daytime')]
     weather_attr = [dict(weather_coarse=k) for k in ['cloudy', 'overcast', 'foggy', 'rainy']]
     time_attr = [dict(timeofday_coarse=k) for k in ['dawn/dusk', 'night']]
-    for attr in source_attr + weather_attr + time_attr:
+    for domain_idx, attr in enumerate(weather_attr + time_attr):
         cfg.data.test['filter_cfg']['attributes'] = attr
         dataset = build_dataset(cfg.data.test)
         data_loader = build_dataloader(dataset, **test_loader_cfg)
 
-        checkpoint = load_checkpoint(detector, args.checkpoint, map_location='cpu')
-        if args.fuse_conv_bn:
-            detector = fuse_conv_bn(detector)
+        if not args.continual or domain_idx == 0:
+            checkpoint = load_checkpoint(detector, args.checkpoint, map_location='cpu')
+            if args.fuse_conv_bn:
+                detector = fuse_conv_bn(detector)
 
-        model = build_adapter(cfg.adapter, detector=detector)
-        if 'CLASSES' in checkpoint.get('meta', {}):
-            model.CLASSES = checkpoint['meta']['CLASSES']
-        else:
-            model.CLASSES = dataset.CLASSES
+            model = build_adapter(cfg.adapter, detector=detector)
+            if 'CLASSES' in checkpoint.get('meta', {}):
+                model.CLASSES = checkpoint['meta']['CLASSES']
+            else:
+                model.CLASSES = dataset.CLASSES
 
-        if not distributed:
-            model = build_dp(model, cfg.device, device_ids=cfg.gpu_ids)
-            assert not (args.show_box_only and args.show_mask_only), \
-                '"--show-box-only" and "--show-mask-only" cannot be both specified'
-            outputs, wandb_idx = single_gpu_adapt(model, data_loader, cfg, wandb_init_idx=wandb_idx, wandb=wandb)
+            if not distributed:
+                model = build_dp(model, cfg.device, device_ids=cfg.gpu_ids)
+                assert not (args.show_box_only and args.show_mask_only), \
+                    '"--show-box-only" and "--show-mask-only" cannot be both specified'
+        outputs, wandb_idx = single_gpu_adapt(model, data_loader, cfg, wandb_init_idx=wandb_idx, wandb=wandb)
 
         rank, _ = get_dist_info()
         if rank == 0:

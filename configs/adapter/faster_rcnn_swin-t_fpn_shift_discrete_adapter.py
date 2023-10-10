@@ -1,5 +1,5 @@
 _base_ = [
-    './faster_rcnn_swin-t_fpn_1x_shift_discrete.py'
+    './faster_rcnn_swin-t_fpn_shift_discrete.py'
 ]
 
 data = dict(samples_per_gpu=2)
