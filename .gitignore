@@ -118,6 +118,7 @@ docs/modelzoo_statistics.md
 mmdet/.mim
 work_dirs/
 storage/
+wandb
 
 # Pytorch
 *.pth

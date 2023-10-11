@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y ffmpeg libsm6 libxext6 git ninja-build 
 # Install MMCV
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools
 RUN pip install --no-cache-dir mmcv-full==1.3.17 -f https://download.openmmlab.com/mmcv/dist/cu101/torch1.6.0/index.html
-RUN pip install --no-cache-dir numpy==1.21.6 appdirs==1.4.4 imagecorruptions==1.1.2
+RUN pip install --no-cache-dir numpy==1.21.6 appdirs==1.4.4 imagecorruptions==1.1.2 wandb
 
 # Shift dataset
 RUN pip install -e git+https://github.com/SysCV/shift-dev.git@f8e4825e04f5584c8d1a0a96c85fc42afc1cbe57#egg=shift_dev

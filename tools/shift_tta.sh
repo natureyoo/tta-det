@@ -7,13 +7,13 @@ do python tools/shift_adapt.py \
     --eval "mAP" --wandb --lr ${lr}
 done
 
-for lr in 0.0001
-do python tools/shift_adapt.py \
-    configs/adapter/faster_rcnn_swin-t_fpn_shift_discrete.py \
-    storage/ckpt/faster_rcnn_swin-t-p4-w7-fpn_1x_shift_epoch_12.pth \
-    --work-dir "work_dirs/SHIFT_CTA/faster_rcnn_swin-t-p4-w7_fpn_1x_ema-kl_full_lr-${lr}_clip5.0" \
-    --eval "mAP" --wandb --lr ${lr} --continual
-done
+# for lr in 0.0001
+# do python tools/shift_adapt.py \
+#     configs/adapter/faster_rcnn_swin-t_fpn_shift_discrete.py \
+#     storage/ckpt/faster_rcnn_swin-t-p4-w7-fpn_1x_shift_epoch_12.pth \
+#     --work-dir "work_dirs/SHIFT_CTA/faster_rcnn_swin-t-p4-w7_fpn_1x_ema-kl_full_lr-${lr}_clip5.0" \
+#     --eval "mAP" --wandb --lr ${lr} --continual
+# done
 
 ## tta swin adapter
 #python tools/shift_adapt.py \
