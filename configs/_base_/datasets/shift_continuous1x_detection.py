@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'SHIFTDataset'
-data_root = 'data/shift/continuous/images/1x'
+data_root = 'data/shift/continuous1x/images/'
 attributes = dict(weather_coarse='clear', timeofday_coarse='daytime')
 
 img_norm_cfg = dict(
@@ -31,46 +31,48 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=2,
-    workers_per_gpu=2,
+    samples_per_gpu=4,
+    workers_per_gpu=4,
     train=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file='train/front/det_2d.json',
-        img_prefix='train/front/img.zip',
-        backend_type='zip',
+        img_prefix='train/front/images',
+        backend_type='file',
         pipeline=train_pipeline,
         filter_cfg=dict(
             attributes=attributes,
             filter_empty_gt=False,
             min_size=32
         ),
-        seq_info='seq.csv'
+        seq_info='train/front/seq.csv'
     ),
     val=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file='val/front/det_2d.json',
-        img_prefix='val/front/img.zip',
-        backend_type='zip',
+        img_prefix='val/front/images',
+        backend_type='file',
         pipeline=test_pipeline,
         filter_cfg=dict(
             attributes=attributes,
             filter_empty_gt=False,
             min_size=32
-        )
+        ),
+        seq_info='val/front/seq.csv'
     ),
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='test/front/det_2d.json',
-        img_prefix='test/front/img.zip',
-        backend_type='zip',
+        ann_file='val/front/det_2d.json',
+        img_prefix='val/front/images',
+        backend_type='file',
         pipeline=test_pipeline,
         filter_cfg=dict(
             attributes=attributes,
             filter_empty_gt=False,
             min_size=32
-        )
+        ),
+        seq_info='val/front/seq.csv'
     ))
 evaluation = dict(interval=1, metric='mAP')

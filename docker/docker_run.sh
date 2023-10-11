@@ -1,0 +1,1 @@
+docker run --gpus all --name tta-det --ipc=host --shm-size=8g -it -v $PWD:/mmdetection -v /home/$USER/data/:/mmdetection/data/ -v /etc/localtime:/etc/localtime mmdetection 
