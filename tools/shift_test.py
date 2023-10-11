@@ -165,6 +165,11 @@ def main():
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
+        
+    # dump cfg
+    print('Configs:')
+    for k, v in sorted(vars(cfg).items()):
+        print('\t{}: {}'.format(k, v))
 
     if 'pretrained' in cfg.model:
         cfg.model.pretrained = None
